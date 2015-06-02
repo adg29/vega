@@ -1,6 +1,8 @@
 var Node = require('../src/dataflow/Node');
 global.expect = require('chai').expect;
-global.parseSpec = require('../src/parse/spec');
+global.validator  = require('is-my-json-valid')
+global.transforms = require('../src/transforms/');
+global.parseSpec  = require('../src/parse/spec');
 global.util = require('datalib');
 global.modelFactory = function(model) { return (model.fire(), model); };
 global.viewFactory = function(model) { 
