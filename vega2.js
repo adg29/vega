@@ -7280,84 +7280,87 @@ parseData.datasource = function(model, d) {
   return ds;    
 };
 
-module.exports   = parseData;
+module.exports = parseData;
 parseData.schema = {
-  "$schema": "http://json-schema.org/draft-04/schema#",
-  "title": "Input data set definition",
-  "type": "object",
+  "defs": {
+    "data": {
+      "title": "Input data set definition",
+      "type": "object",
 
-  "allOf": [{
-    "properties": {
-      "name": {"type": "string"},
-      "transform": {"$ref": "#/refs/transform"},
-      "format": {
-        "type": "object",
+      "allOf": [{
+        "properties": {
+          "name": {"type": "string"},
+          "transform": {"$ref": "#/defs/transform"},
+          "format": {
+            "type": "object",
+            "oneOf": [{
+              "properties": {
+                "type": {"enum": ["json"]},
+                "parse": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "enum": ["number", "boolean", "date", "string"]
+                  }
+                },
+                "property": {"type": "string"}
+              },
+              "additionalProperties": false
+            }, {
+              "properties": {
+                "type": {"enum": ["csv", "tsv"]},
+                "parse": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "enum": ["number", "boolean", "date", "string"]
+                  }
+                }
+              },
+              "additionalProperties": false
+            }, {
+              "oneOf": [{
+                "properties": {
+                  "type": {"enum": ["topojson"]},
+                  "feature": {"type": "string"}
+                },
+                "additionalProperties": false
+              }, {
+                "properties": {
+                  "type": {"enum": ["topojson"]},
+                  "mesh": {"type": "string"}
+                },
+                "additionalProperties": false
+              }]
+            }, {
+              "properties": {
+                "type": {"enum": ["treejson"]},
+                "children": {"type": "string"},
+                "parse": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "enum": ["number", "boolean", "date", "string"]
+                  }
+                }
+              },
+              "additionalProperties": false
+            }]
+          }
+        },
+        "required": ["name"]
+      }, {
         "oneOf": [{
-          "properties": {
-            "type": {"enum": ["json"]},
-            "parse": {
-              "type": "object",
-              "additionalProperties": {
-                "enum": ["number", "boolean", "date", "string"]
-              }
-            },
-            "property": {"type": "string"}
-          },
-          "additionalProperties": false
+          "properties": {"source": {"type": "string"}},
+          "required": ["source"]
         }, {
-          "properties": {
-            "type": {"enum": ["csv", "tsv"]},
-            "parse": {
-              "type": "object",
-              "additionalProperties": {
-                "enum": ["number", "boolean", "date", "string"]
-              }
-            }
-          },
-          "additionalProperties": false
+          "properties": {"values": {"type": "array"}},
+          "required": ["values"]
         }, {
-          "oneOf": [{
-            "properties": {
-              "type": {"enum": ["topojson"]},
-              "feature": {"type": "string"}
-            },
-            "additionalProperties": false
-          }, {
-            "properties": {
-              "type": {"enum": ["topojson"]},
-              "mesh": {"type": "string"}
-            },
-            "additionalProperties": false
-          }]
-        }, {
-          "properties": {
-            "type": {"enum": ["treejson"]},
-            "children": {"type": "string"},
-            "parse": {
-              "type": "object",
-              "additionalProperties": {
-                "enum": ["number", "boolean", "date", "string"]
-              }
-            }
-          },
-          "additionalProperties": false
+          "properties": {"url": {"type": "string"}},
+          "required": ["url"]
         }]
-      }
-    },
-    "required": ["name"]
-  }, {
-    "oneOf": [{
-      "properties": {"source": {"type": "string"}},
-      "required": ["source"]
-    }, {
-      "properties": {"values": {"type": "array"}},
-      "required": ["values"]
-    }, {
-      "properties": {"url": {"type": "string"}},
-      "required": ["url"]
-    }]
-  }]
-}
+      }]
+    }
+  }
+};
 
 },{"../util/config":107,"./modify":53,"./transforms":60,"datalib":20}],46:[function(require,module,exports){
 /*
@@ -8550,50 +8553,52 @@ function parseMark(model, mark) {
 };
 
 module.exports = parseMark;
-parseMark.schemaRefs = {
-  "mark": {
-    "type": "object",
-
-    "properties": {
-      "name": {"type": "string"},
-      "key": {"type": "string"},
-      "type": {"enum": ["rect", "symbol", "path", "arc", 
-        "area", "line", "rule", "image", "text", "group"]},
-
-      "from": {
-        "type": "object",
-        "properties": {
-          "data": {"type": "string"},
-          "mark": {"type": "string"},
-          "transform": {"$ref": "#/refs/transform"}
-        },
-        "oneOf":[{"required": ["data"]}, {"required": ["mark"]}]
-      },
-
-      "delay": {"$ref": "#/refs/value"},
-      "ease": {
-        "enum": ["linear", "quad", "cubic", "sin", 
-          "exp", "circle", "bounce"].reduce(function(acc, e) {
-            ["in", "out", "in-out", "out-in"].forEach(function(m) {
-              acc.push(e+"-"+m);
-            });
-            return acc;
-        }, [])
-      },
+parseMark.schema = {
+  "defs": {
+    "mark": {
+      "type": "object",
 
       "properties": {
-        "type": "object",
-        "properties": {
-          "enter":  parseProperties.schema,
-          "update": parseProperties.schema,
-          "exit":   parseProperties.schema
-        },
-        "additionalProperties": parseProperties.schema,
-        "anyOf": [{"required": ["enter"]}, {"required": ["update"]}]
-      }
-    },
+        "name": {"type": "string"},
+        "key": {"type": "string"},
+        "type": {"enum": ["rect", "symbol", "path", "arc", 
+          "area", "line", "rule", "image", "text", "group"]},
 
-    "required": ["type"]
+        "from": {
+          "type": "object",
+          "properties": {
+            "data": {"type": "string"},
+            "mark": {"type": "string"},
+            "transform": {"$ref": "#/defs/transform"}
+          },
+          "oneOf":[{"required": ["data"]}, {"required": ["mark"]}]
+        },
+
+        "delay": {"$ref": "#/refs/value"},
+        "ease": {
+          "enum": ["linear", "quad", "cubic", "sin", 
+            "exp", "circle", "bounce"].reduce(function(acc, e) {
+              ["in", "out", "in-out", "out-in"].forEach(function(m) {
+                acc.push(e+"-"+m);
+              });
+              return acc;
+          }, [])
+        },
+
+        "properties": {
+          "type": "object",
+          "properties": {
+            "enter":  {"$ref": "#/defs/propset"},
+            "update": {"$ref": "#/defs/propset"},
+            "exit":   {"$ref": "#/defs/propset"}
+          },
+          "additionalProperties": {"$ref": "#/defs/propset"},
+          "anyOf": [{"required": ["enter"]}, {"required": ["update"]}]
+        }
+      },
+
+      "required": ["type"]
+    }
   }
 }
 },{"./properties":56,"datalib":20}],52:[function(require,module,exports){
@@ -8612,27 +8617,29 @@ function parseRootMark(model, spec, width, height) {
 };
 
 module.exports = parseRootMark;
-parseRootMark.schemaRefs = {
-  "container": {
-    "type": "object",
-    "properties": {
-      // "scales": TODO
-      // "axes": TODO
-      // "legends": TODO
-      "marks": {
-        "type": "array",
-        "items": {"anyOf":[{"$ref": "#/refs/groupMark"}, {"$ref": "#/refs/mark"}]}
-      }
-    }
-  },
-
-  "groupMark": {
-    "allOf": [{"$ref": "#/refs/mark"}, {"$ref": "#/refs/container"}, {
+parseRootMark.schema = {
+  "defs": {
+    "container": {
+      "type": "object",
       "properties": {
-        "type": {"enum": ["group"]}
-      },
-      "required": ["type"]
-    }]
+        // "scales": TODO
+        // "axes": TODO
+        // "legends": TODO
+        "marks": {
+          "type": "array",
+          "items": {"anyOf":[{"$ref": "#/defs/groupMark"}, {"$ref": "#/defs/mark"}]}
+        }
+      }
+    },
+
+    "groupMark": {
+      "allOf": [{"$ref": "#/defs/mark"}, {"$ref": "#/defs/container"}, {
+        "properties": {
+          "type": {"enum": ["group"]}
+        },
+        "required": ["type"]
+      }]
+    }
   }
 };
 
@@ -9195,137 +9202,138 @@ function scaleRef(ref) {
 }
 
 module.exports = properties;
+properties.schema = {
+  "refs": {
+    "signal": {
+      "title": "SignalRef",
+      "type": "object",
+      "properties": {"signal": {"type": "string"}},
+      "required": ["signal"]
+    },
 
-properties.schemaRefs = {
-  "signal": {
-    "title": "SignalRef",
-    "type": "object",
-    "properties": {"signal": {"type": "string"}},
-    "required": ["signal"]
-  },
+    "field": {
+      "title": "FieldRef",
+      "oneOf": [
+        {"type": "string"},
+        {
+          "oneOf": [
+            {"$ref": "#/refs/signal"},
+            {
+              "type": "object", 
+              "properties": {"datum": {"$ref": "#/refs/field"}},
+              "required": ["datum"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object", 
+              "properties": {
+                "group": {"$ref": "#/refs/field"}, 
+                "level": {"type": "number"}
+              },
+              "required": ["group"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object", 
+              "properties": {
+                "parent": {"$ref": "#/refs/field"}, 
+                "level": {"type": "number"}
+              },
+              "required": ["parent"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      ]
+    },
 
-  "field": {
-    "title": "FieldRef",
-    "oneOf": [
-      {"type": "string"},
-      {
-        "oneOf": [
-          {"$ref": "#/refs/signal"},
-          {
-            "type": "object", 
-            "properties": {"datum": {"$ref": "#/refs/field"}},
-            "required": ["datum"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object", 
-            "properties": {
-              "group": {"$ref": "#/refs/field"}, 
-              "level": {"type": "number"}
-            },
-            "required": ["group"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object", 
-            "properties": {
-              "parent": {"$ref": "#/refs/field"}, 
-              "level": {"type": "number"}
-            },
-            "required": ["parent"],
-            "additionalProperties": false
+    "scale": {
+      "title": "ScaleRef",
+      "oneOf": [
+        {"$ref": "#/refs/field"},
+        {
+          "type": "object",
+          "properties": {
+            "name": {"$ref": "#/refs/field"},
+            "invert": {"type": "boolean", "default": false}
           }
-        ]
-      }
-    ]
-  },
+        }
+      ]
+    },
 
-  "scale": {
-    "title": "ScaleRef",
-    "oneOf": [
-      {"$ref": "#/refs/field"},
-      {
+    "value": {
+      "title": "ValueRef",
+      "type": "object",
+      "allOf": [{
+        "properties": {
+          "mult": {"type": "number"},
+          "offset": {"type": "number"},
+          "scale": {"$ref": "#/refs/scale"},
+          "band": {"type": "boolean"}
+        }
+      }, {
+        "oneOf": [{
+          "$ref": "#/refs/signal",
+          "required": ["signal"]
+        }, {
+          "properties": {"value": {}},
+          "required": ["value"]
+        }, {
+          "properties": {"field": {"$ref": "#/refs/field"}},
+          "required": ["field"]
+        }]
+      }]
+    },
+
+    "color": {
+      "title": "ColorRef",
+      "oneOf": [{"$ref": "#/refs/value"}, {
         "type": "object",
         "properties": {
-          "name": {"$ref": "#/refs/field"},
-          "invert": {"type": "boolean", "default": false}
-        }
-      }
-    ]
-  },
-
-  "value": {
-    "title": "ValueRef",
-    "type": "object",
-    "allOf": [{
-      "properties": {
-        "mult": {"type": "number"},
-        "offset": {"type": "number"},
-        "scale": {"$ref": "#/refs/scale"},
-        "band": {"type": "boolean"}
-      }
-    }, {
-      "oneOf": [{
-        "$ref": "#/refs/signal",
-        "required": ["signal"]
+          "r": {"$ref": "#/refs/value"},
+          "g": {"$ref": "#/refs/value"},
+          "b": {"$ref": "#/refs/value"}
+        },
+        "required": ["r", "g", "b"]
       }, {
-        "properties": {"value": {}},
-        "required": ["value"]
+        "type": "object",
+        "properties": {
+          "h": {"$ref": "#/refs/value"},
+          "s": {"$ref": "#/refs/value"},
+          "l": {"$ref": "#/refs/value"}
+        },
+        "required": ["h", "s", "l"]
       }, {
-        "properties": {"field": {"$ref": "#/refs/field"}},
-        "required": ["field"]
+        "type": "object",
+        "properties": {
+          "l": {"$ref": "#/refs/value"},
+          "a": {"$ref": "#/refs/value"},
+          "b": {"$ref": "#/refs/value"}
+        },
+        "required": ["l", "a", "b"]
+      }, {
+        "type": "object",
+        "properties": {
+          "h": {"$ref": "#/refs/value"},
+          "c": {"$ref": "#/refs/value"},
+          "l": {"$ref": "#/refs/value"}
+        },
+        "required": ["h", "c", "l"]
       }]
-    }]
+    }
   },
-
-  "color": {
-    "title": "ColorRef",
-    "oneOf": [{"$ref": "#/refs/value"}, {
+  "defs": {
+    "propset": {
+      "title": "Mark property set",
       "type": "object",
       "properties": {
-        "r": {"$ref": "#/refs/value"},
-        "g": {"$ref": "#/refs/value"},
-        "b": {"$ref": "#/refs/value"}
+        "fill": {"$ref": "#/refs/color"},
+        "stroke": {"$ref": "#/refs/color"}
       },
-      "required": ["r", "g", "b"]
-    }, {
-      "type": "object",
-      "properties": {
-        "h": {"$ref": "#/refs/value"},
-        "s": {"$ref": "#/refs/value"},
-        "l": {"$ref": "#/refs/value"}
-      },
-      "required": ["h", "s", "l"]
-    }, {
-      "type": "object",
-      "properties": {
-        "l": {"$ref": "#/refs/value"},
-        "a": {"$ref": "#/refs/value"},
-        "b": {"$ref": "#/refs/value"}
-      },
-      "required": ["l", "a", "b"]
-    }, {
-      "type": "object",
-      "properties": {
-        "h": {"$ref": "#/refs/value"},
-        "c": {"$ref": "#/refs/value"},
-        "l": {"$ref": "#/refs/value"}
-      },
-      "required": ["h", "c", "l"]
-    }]
+      "additionalProperties": {"$ref": "#/refs/value"}
+    }
   }
 };
-
-properties.schema = {
-  "$schema": "http://json-schema.org/draft-04/schema#",
-  "title": "Mark property set",
-  "type": "object",
-  "properties": {
-    "fill": {"$ref": "#/refs/color"},
-    "stroke": {"$ref": "#/refs/color"}
-  },
-  "additionalProperties": {"$ref": "#/refs/value"}
-}
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
 },{"../dataflow/tuple":37,"../util/config":107,"datalib":20}],57:[function(require,module,exports){
@@ -9422,18 +9430,21 @@ function parseSpec(spec, callback, viewFactory) {
 
 module.exports = parseSpec;
 parseSpec.schema = {
-  "$schema": "http://json-schema.org/draft-04/schema#",
-  "title": "Vega visualization specification",
-  "type": "object",
+  "defs": {
+    "spec": {
+      "title": "Vega visualization specification",
+      "type": "object",
 
-  "allOf": [{"$ref": "#/refs/container"}, {
-    "properties": {
-      "data": {
-        "type": "array",
-        "items": parseData.schema
-      }
+      "allOf": [{"$ref": "#/defs/container"}, {
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {"$ref": "#/defs/data"}
+          }
+        }
+      }]
     }
-  }]
+  }
 };
 },{"../core/Model":29,"../core/View":30,"../parse/background":44,"../parse/data":45,"../parse/interactors":49,"../parse/marks":52,"../parse/padding":54,"../parse/predicates":55,"../parse/signals":57,"datalib":20}],59:[function(require,module,exports){
 (function (global){
@@ -17739,9 +17750,12 @@ var dl = require('datalib'),
     parse = require('../parse');
 
 module.exports = function schema() {
-  var schema  = dl.extend(dl.duplicate(parse.spec.schema), {refs: {}});
+  var schema = {defs: {}, refs:{}, "$ref": "#/defs/spec"};
   dl.keys(parse).forEach(function(k) {
-    dl.extend(schema.refs, parse[k].schemaRefs);
+    var s = parse[k].schema;
+    if (!s) return;
+    if (s.refs) dl.extend(schema.refs, s.refs);
+    if (s.defs) dl.extend(schema.defs, s.defs);
   });
   return schema;
 };
