@@ -1,6 +1,7 @@
 var config = require('./config');
 var ts;
 
+/* istanbul ignore next */
 module.exports = function(input, args) {
   if (!config.debug) return;
   var log = Function.prototype.bind.call(console.log, console);

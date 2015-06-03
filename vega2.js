@@ -331,9 +331,7 @@ proto.changes = function() {
 
     // organize output tuples
     if (cell.num <= 0) {
-      if (flag === Flags.MOD_CELL) {
-        changes.rem.push(cell.tuple);
-      }
+      changes.rem.push(cell.tuple);
       delete this._cells[k];
     } else if (flag & Flags.ADD_CELL) {
       changes.add.push(cell.tuple);
@@ -474,6 +472,7 @@ proto.min = function(get) {
   var m = this.extent(get)[0];
   return m ? get(m) : +Infinity;
 };
+
 proto.max = function(get) {
   var m = this.extent(get)[1];
   return m ? get(m) : -Infinity;
@@ -548,7 +547,7 @@ var types = {
     name: 'mean',
     init: 'this.mean = 0;',
     add:  'var d = v - this.mean; this.mean += d / this.valid;',
-    rem:  'var d = v - this.mean; this.mean -= d / this.valid;',
+    rem:  'var d = v - this.mean; this.mean -= this.valid ? d / this.valid : this.mean;',
     set:  'this.mean'
   }),
   'average': measure({
@@ -561,22 +560,22 @@ var types = {
     init: 'this.dev = 0;',
     add:  'this.dev += d * (v - this.mean);',
     rem:  'this.dev -= d * (v - this.mean);',
-    set:  'this.dev / (this.valid-1)',
+    set:  'this.valid > 1 ? this.dev / (this.valid-1) : 0',
     req:  ['mean'], idx: 1
   }),
   'variancep': measure({
     name: 'variancep',
-    set:  'this.dev / this.valid',
+    set:  'this.valid > 1 ? this.dev / this.valid : 0',
     req:  ['variance'], idx: 2
   }),
   'stdev': measure({
     name: 'stdev',
-    set:  'Math.sqrt(this.dev / (this.valid-1))',
+    set:  'this.valid > 1 ? Math.sqrt(this.dev / (this.valid-1)) : 0',
     req:  ['variance'], idx: 2
   }),
   'stdevp': measure({
     name: 'stdevp',
-    set:  'Math.sqrt(this.dev / this.valid)',
+    set:  'this.valid > 1 ? Math.sqrt(this.dev / this.valid) : 0',
     req:  ['variance'], idx: 2
   }),
   'median': measure({
@@ -661,8 +660,8 @@ function resolve(agg, stream) {
 function create(agg, stream, accessor, mutator) {
   var all = resolve(agg, stream),
       ctr = 'this.cell = cell; this.tuple = t; this.valid = 0; this.missing = 0;',
-      add = 'if (v==null) this.missing++; if (!this.isValid(v)) return; this.valid++;',
-      rem = 'if (v==null) this.missing--; if (!this.isValid(v)) return; this.valid--;',
+      add = 'if (v==null) this.missing++; if (!this.isValid(v)) return; ++this.valid;',
+      rem = 'if (v==null) this.missing--; if (!this.isValid(v)) return; --this.valid;',
       set = 'var t = this.tuple; var cell = this.cell;';
 
   all.forEach(function(a) {
@@ -690,16 +689,9 @@ function create(agg, stream, accessor, mutator) {
   ctr.prototype.rem = Function('t', 'var v = this.get(t);' + rem);
   ctr.prototype.set = Function(set);
   ctr.prototype.get = accessor;
-  ctr.prototype.mod = mod;
   ctr.prototype.distinct = require('../stats').count.distinct;
   ctr.prototype.isValid = util.isValid;
   return ctr;
-}
-
-function mod(v_new, v_old) {
-  if (v_old === undefined || v_old === v_new) return;
-  this.rem(v_old);
-  this.add(v_new);
 }
 
 types.create = create;
@@ -710,7 +702,7 @@ var units = require('../time-units');
 var EPSILON = 1e-15;
 
 function bins(opt) {
-  opt = opt || {};
+  if (!opt) { throw Error("Missing binning options."); }
 
   // determine range
   var maxb = opt.maxbins || 15,
@@ -793,7 +785,7 @@ function date_index(v) {
 }
 
 bins.date = function(opt) {
-  opt = opt || {};
+  if (!opt) { throw Error("Missing date binning options."); }
 
   // find time step, then bin
   var dmin = opt.min,
@@ -935,7 +927,7 @@ gen.random = {};
 
 gen.random.uniform = function(min, max) {
   if (max === undefined) {
-    max = min;
+    max = min === undefined ? 1 : min;
     min = 0;
   }
   var d = max - min;
@@ -1031,9 +1023,9 @@ module.exports = function(data, format) {
 },{"../../util":25}],14:[function(require,module,exports){
 (function (global){
 var json = require('./json');
-var topojson = (typeof window !== "undefined" ? window.topojson : typeof global !== "undefined" ? global.topojson : null);
 
-module.exports = function(data, format) {
+var reader = function(data, format) {
+  var topojson = reader.topojson;
   if (topojson == null) { throw Error('TopoJSON library not loaded.'); }
 
   var t = json(data, format), obj;
@@ -1042,7 +1034,7 @@ module.exports = function(data, format) {
     if ((obj = t.objects[format.feature])) {
       return topojson.feature(t, obj).features;
     } else {
-      throw Error('Invalid TopoJSON object: '+format.feature);
+      throw Error('Invalid TopoJSON object: ' + format.feature);
     }
   } else if (format && format.mesh) {
     if ((obj = t.objects[format.mesh])) {
@@ -1053,10 +1045,10 @@ module.exports = function(data, format) {
   } else {
     throw Error('Missing TopoJSON feature or mesh parameter.');
   }
-
-  return [];
 };
 
+reader.topojson = (typeof window !== "undefined" ? window.topojson : typeof global !== "undefined" ? global.topojson : null);
+module.exports = reader;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
 },{"./json":13}],15:[function(require,module,exports){
@@ -1235,6 +1227,8 @@ function http(url, callback) {
     if (!error && response.statusCode === 200) {
       callback(null, body);
     } else {
+      error = error ||
+        'Load failed with response code ' + response.statusCode + '.';
       callback(error, null);
     }
   });
@@ -1297,7 +1291,7 @@ module.exports = util
 
       // load data
       var data = load(opt, callback ? function(error, data) {
-        if (error) callback(error, null);
+        if (error) { callback(error, null); return; }
         try {
           // data loaded, now parse it (async)
           data = read(data, format);
@@ -1393,8 +1387,7 @@ function infer(values, f) {
 function inferAll(data, fields) {
   fields = fields || util.keys(data[0]);
   return fields.reduce(function(types, f) {
-    var type = infer(data, f);
-    if (PARSERS[type]) types[f] = type;
+    types[f] = infer(data, f);
     return types;
   }, {});
 }
@@ -1474,7 +1467,7 @@ module.exports.table = function(data, opt) {
     return '{{' +
       name +
       (FMT[types[name]] || '') +
-      ('|pad:' + lens[i] + ',' + POS[types[name]] || 'right') +
+      ('|pad:' + lens[i] + ',' + (POS[types[name]] || 'right')) +
       ('|truncate:' + lens[i]) +
     '}}';
   }).join(opt.separator));
@@ -1653,7 +1646,7 @@ stats.mean = function(values, f) {
 // Compute the sample variance of an array of numbers.
 stats.variance = function(values, f) {
   f = util.$(f);
-  if (!util.isArray(values) || values.length===0) return 0;
+  if (!util.isArray(values) || values.length < 2) return 0;
   var mean = 0, M2 = 0, delta, i, c, v;
   for (i=0, c=0; i<values.length; ++i) {
     v = f ? f(values[i]) : values[i];
@@ -1735,14 +1728,14 @@ stats.dot = function(values, a, b) {
     }
     for (i=0; i<values.length; ++i) {
       v = values[i] * a[i];
-      if (!Number.isNaN(v)) sum += v;
+      if (v === v) sum += v;
     }
   } else {
     a = util.$(a);
     b = util.$(b);
     for (i=0; i<values.length; ++i) {
       v = a(values[i]) * b(values[i]);
-      if (!Number.isNaN(v)) sum += v;
+      if (v === v) sum += v;
     }
   }
   return sum;
@@ -2031,16 +2024,12 @@ function template(text) {
   var src = source(text, 'd');
   src = 'var __t; return ' + src + ';';
 
-  try {
-    /* jshint evil: true */
-    return (new Function('d', src)).bind(context);
-  } catch (e) {
-    e.source = src;
-    throw e;
-  }
+  /* jshint evil: true */
+  return (new Function('d', src)).bind(context);
 }
 
 template.source = source;
+template.context = context;
 module.exports = template;
 
 // clear cache of format objects
@@ -2050,7 +2039,11 @@ template.clearFormatCache = function() {
   context.format_map = {};
 };
 
-function source(text, variable) {
+// Generate source code for a template function.
+// text: the template text
+// variable: the name of the data object variable ('obj' by default)
+// properties: optional hash for collecting all accessed properties
+function source(text, variable, properties) {
   variable = variable || 'obj';
   var index = 0;
   var src = '\'';
@@ -2065,7 +2058,7 @@ function source(text, variable) {
 
     if (interpolate) {
       src += '\'\n+((__t=(' +
-        template_var(interpolate, variable) +
+        template_var(interpolate, variable, properties) +
         '))==null?\'\':__t)+\n\'';
     }
 
@@ -2075,11 +2068,11 @@ function source(text, variable) {
   return src + '\'';
 }
 
-function template_var(text, variable) {
+function template_var(text, variable, properties) {
   var filters = text.split('|');
   var prop = filters.shift().trim();
   var stringCast = true;
-  
+
   function strcall(fn) {
     fn = fn || '';
     if (stringCast) {
@@ -2090,14 +2083,15 @@ function template_var(text, variable) {
     }
     return src;
   }
-  
+
   function date() {
     return '(typeof ' + src + '==="number"?new Date('+src+'):'+src+')';
   }
-  
+
+  if (properties) properties[prop] = 1;
   var src = util.field(prop).map(util.str).join('][');
   src = variable + '[' + src + ']';
-  
+
   for (var i=0; i<filters.length; ++i) {
     var f = filters[i], args = null, pidx, a, b;
 
@@ -2417,7 +2411,7 @@ module.exports = units;
 
 },{}],25:[function(require,module,exports){
 (function (process){
-var Buffer = require('buffer').Buffer;
+var buffer = require('buffer');
 var units = require('./time-units');
 var u = module.exports = {};
 
@@ -2521,10 +2515,10 @@ u.isDate = function(obj) {
 };
 
 u.isValid = function(obj) {
-  return obj != null && !Number.isNaN(obj);
+  return obj != null && obj === obj;
 };
 
-u.isBuffer = (Buffer && Buffer.isBuffer) || u.false;
+u.isBuffer = (buffer.Buffer && buffer.Buffer.isBuffer) || u.false;
 
 // type coercion functions
 
@@ -2641,8 +2635,6 @@ u.cmp = function(a, b) {
   } else if (a > b) {
     return 1;
   } else if (a >= b) {
-    return 0;
-  } else if (a === null && b === null) {
     return 0;
   } else if (a === null) {
     return -1;
@@ -8660,10 +8652,11 @@ parseMark.schema = {
             "mark": {"type": "string"},
             "transform": {"$ref": "#/defs/transform"}
           },
-          "oneOf":[{"required": ["data"]}, {"required": ["mark"]}]
+          "oneOf":[{"required": ["data"]}, {"required": ["mark"]}],
+          "additionalProperties": false
         },
 
-        "delay": {"$ref": "#/refs/value"},
+        "delay": {"$ref": "#/refs/numberValue"},
         "ease": {
           "enum": ["linear", "quad", "cubic", "sin", 
             "exp", "circle", "bounce"].reduce(function(acc, e) {
@@ -8681,11 +8674,12 @@ parseMark.schema = {
             "update": {"$ref": "#/defs/propset"},
             "exit":   {"$ref": "#/defs/propset"}
           },
-          "additionalProperties": {"$ref": "#/defs/propset"},
+          "additionalProperties": false,
           "anyOf": [{"required": ["enter"]}, {"required": ["update"]}]
         }
       },
 
+      "additionalProperties": false,
       "required": ["type"]
     }
   }
@@ -9297,6 +9291,26 @@ function scaleRef(ref) {
 }
 
 module.exports = properties;
+
+function valueSchema(type) {
+  type = dl.isArray(type) ? {"enum": type} : {"type": type};
+  return {
+    "type": "object",
+    "allOf": [{"$ref": "#/refs/valueModifiers"}, {
+      "oneOf": [{
+        "$ref": "#/refs/signal",
+        "required": ["signal"]
+      }, {
+        "properties": {"value": type},
+        "required": ["value"]
+      }, {
+        "properties": {"field": {"$ref": "#/refs/field"}},
+        "required": ["field"]
+      }]
+    }]
+  }
+}
+
 properties.schema = {
   "refs": {
     "signal": {
@@ -9356,76 +9370,118 @@ properties.schema = {
       ]
     },
 
-    "value": {
-      "title": "ValueRef",
-      "type": "object",
-      "allOf": [{
-        "properties": {
-          "mult": {"type": "number"},
-          "offset": {"type": "number"},
-          "scale": {"$ref": "#/refs/scale"},
-          "band": {"type": "boolean"}
-        }
-      }, {
-        "oneOf": [{
-          "$ref": "#/refs/signal",
-          "required": ["signal"]
-        }, {
-          "properties": {"value": {}},
-          "required": ["value"]
-        }, {
-          "properties": {"field": {"$ref": "#/refs/field"}},
-          "required": ["field"]
-        }]
-      }]
+    "valueModifiers": {
+      "properties": {
+        "mult": {"type": "number"},
+        "offset": {"type": "number"},
+        "scale": {"$ref": "#/refs/scale"},
+        "band": {"type": "boolean"}
+      }
     },
 
-    "color": {
+    "value": valueSchema({}),
+    "numberValue": valueSchema("number"),
+    "stringValue": valueSchema("string"),
+    "booleanValue": valueSchema("boolean"),
+    "arrayValue": valueSchema("array"),
+
+    "colorValue": {
       "title": "ColorRef",
-      "oneOf": [{"$ref": "#/refs/value"}, {
+      "oneOf": [{"$ref": "#/refs/stringValue"}, {
         "type": "object",
         "properties": {
-          "r": {"$ref": "#/refs/value"},
-          "g": {"$ref": "#/refs/value"},
-          "b": {"$ref": "#/refs/value"}
+          "r": {"$ref": "#/refs/numberValue"},
+          "g": {"$ref": "#/refs/numberValue"},
+          "b": {"$ref": "#/refs/numberValue"}
         },
         "required": ["r", "g", "b"]
       }, {
         "type": "object",
         "properties": {
-          "h": {"$ref": "#/refs/value"},
-          "s": {"$ref": "#/refs/value"},
-          "l": {"$ref": "#/refs/value"}
+          "h": {"$ref": "#/refs/numberValue"},
+          "s": {"$ref": "#/refs/numberValue"},
+          "l": {"$ref": "#/refs/numberValue"}
         },
         "required": ["h", "s", "l"]
       }, {
         "type": "object",
         "properties": {
-          "l": {"$ref": "#/refs/value"},
-          "a": {"$ref": "#/refs/value"},
-          "b": {"$ref": "#/refs/value"}
+          "l": {"$ref": "#/refs/numberValue"},
+          "a": {"$ref": "#/refs/numberValue"},
+          "b": {"$ref": "#/refs/numberValue"}
         },
         "required": ["l", "a", "b"]
       }, {
         "type": "object",
         "properties": {
-          "h": {"$ref": "#/refs/value"},
-          "c": {"$ref": "#/refs/value"},
-          "l": {"$ref": "#/refs/value"}
+          "h": {"$ref": "#/refs/numberValue"},
+          "c": {"$ref": "#/refs/numberValue"},
+          "l": {"$ref": "#/refs/numberValue"}
         },
         "required": ["h", "c", "l"]
       }]
     }
   },
+
   "defs": {
     "propset": {
       "title": "Mark property set",
       "type": "object",
       "properties": {
-        "fill": {"$ref": "#/refs/color"},
-        "stroke": {"$ref": "#/refs/color"}
+        // Common Properties
+        "x": {"$ref": "#/refs/numberValue"},
+        "x2": {"$ref": "#/refs/numberValue"},
+        "width": {"$ref": "#/refs/numberValue"},
+        "y": {"$ref": "#/refs/numberValue"},
+        "y2": {"$ref": "#/refs/numberValue"},
+        "height": {"$ref": "#/refs/numberValue"},
+        "opacity": {"$ref": "#/refs/numberValue"},
+        "fill": {"$ref": "#/refs/colorValue"},
+        "fillOpacity": {"$ref": "#/refs/numberValue"},
+        "stroke": {"$ref": "#/refs/colorValue"},
+        "strokeWidth": {"$ref": "#/refs/numberValue"},
+        "strokeOpacity": {"$ref": "#/refs/numberValue"},
+        "strokeDash": {"$ref": "#/refs/arrayValue"},
+        "strokeDashOffset": {"$ref": "#/refs/numberValue"},
+
+        // Symbol-mark properties
+        "size": {"$ref": "#/refs/numberValue"},
+        "shape": valueSchema(["circle", "square", 
+          "cross", "diamond", "triangle-up", "triangle-down"]),
+
+        // Path-mark properties
+        "path": {"$ref": "#/refs/stringValue"},
+
+        // Arc-mark properties
+        "innerRadius": {"$ref": "#/refs/numberValue"},
+        "outerRadius": {"$ref": "#/refs/numberValue"},
+        "startAngle": {"$ref": "#/refs/numberValue"},
+        "endAngle": {"$ref": "#/refs/numberValue"},
+
+        // Area- and line-mark properties
+        "interpolate": valueSchema(["linear", "step-before", "step-after", 
+          "basis", "basis-open", "cardinal", "cardinal-open", "monotone"]),
+        "tension": {"$ref": "#/refs/numberValue"},
+
+        // Image-mark properties
+        "url": {"$ref": "#/refs/stringValue"},
+        "align": valueSchema(["left", "right", "center"]),
+        "baseline": valueSchema(["top", "middle", "bottom"]),
+
+        // Text-mark properties
+        "text": {"$ref": "#/refs/stringValue"},
+        "dx": {"$ref": "#/refs/numberValue"},
+        "dy": {"$ref": "#/refs/numberValue"},
+        "radius":{"$ref": "#/refs/numberValue"},
+        "theta": {"$ref": "#/refs/numberValue"},
+        "angle": {"$ref": "#/refs/numberValue"},
+        "font": {"$ref": "#/refs/stringValue"},
+        "fontSize": {"$ref": "#/refs/numberValue"},
+        "fontWeight": {"$ref": "#/refs/numberValue"},
+        "fontStyle": {"$ref": "#/refs/stringValue"}
       },
-      "additionalProperties": {"$ref": "#/refs/value"}
+
+      "additionalProperties": false
     }
   }
 };
@@ -9725,13 +9781,15 @@ function parseTransforms(model, def) {
 };
 
 module.exports = parseTransforms;
-parseTransforms.refSchema = {
-  "transform": {
-    "type": "array",
-    "items": {
-      "oneOf": dl.keys(transforms).map(function(t) {
-        return t.schema;
-      })
+parseTransforms.schema = {
+  "defs": {
+    "transform": {
+      "type": "array",
+      "items": {
+        "oneOf": dl.keys(transforms).map(function(k) {
+          return transforms[k].schema;
+        })
+      }
     }
   }
 };
@@ -17831,6 +17889,7 @@ module.exports = {
 var config = require('./config');
 var ts;
 
+/* istanbul ignore next */
 module.exports = function(input, args) {
   if (!config.debug) return;
   var log = Function.prototype.bind.call(console.log, console);
@@ -17844,14 +17903,26 @@ module.exports = function(input, args) {
 var dl = require('datalib'),
     parse = require('../parse');
 
-module.exports = function schema() {
+module.exports = function schema(opt) {
   var schema = {defs: {}, refs:{}, "$ref": "#/defs/spec"};
+  opt = opt || {};
+
   dl.keys(parse).forEach(function(k) {
     var s = parse[k].schema;
     if (!s) return;
     if (s.refs) dl.extend(schema.refs, s.refs);
     if (s.defs) dl.extend(schema.defs, s.defs);
   });
+
+  // Extend schema to support custom mark properties or property sets.
+  if (opt.properties) dl.keys(opt.properties).forEach(function(k) {
+    schema.defs.propset.properties[k] = opt.properties;
+  });
+
+  if (opt.propertySets) dl.keys(opt.propertySets).forEach(function(k) {
+    schema.defs.mark.properties.properties.properties[k] = opt.propertySets[k];
+  });
+
   return schema;
 };
 },{"../parse":48,"datalib":20}]},{},[1])(1)
