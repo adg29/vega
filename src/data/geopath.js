@@ -3,10 +3,16 @@ vg.data.geopath = function() {
       projection = "mercator",
       geojson = vg.identity,
       opt = {},
-      output = {"path": "path"};
+      output = {
+        "path": "path",
+        "centroidX": "centroidX",
+        "centroidY": "centroidY",
+      };
 
   var map = vg.data.mapper(function(d) {
     d[output.path] = geopath(geojson(d));
+    d[output.centroidX] = geopath.centroid(d.data)[0];
+    d[output.centroidY] = geopath.centroid(d.data)[1];
     return d;
   });
   
