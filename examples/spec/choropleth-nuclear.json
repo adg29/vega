@@ -3,30 +3,9 @@
   "height": 500,
   "data": [
     {
-      "name": "unemp",
-      "url": "data/unemployment.tsv",
-      "format": {"type": "tsv", "parse": {"rate":"number"}}
-    },
-    {
       "name": "emissions",
       "url": "data/us-state-emissions.csv",
       "format": {"type": "csv", "parse": {"emissions":"number"}}
-    },
-    {
-      "name": "us-county-unemp",
-      "url": "data/us-county-names.tsv",
-      "format": {"type": "tsv"},
-      "transform": [
-        {
-          "type": "zip",
-          "key": "data.id",
-          "with": "unemp",
-          "withKey": "data.id",
-          "as": "value",
-          "default": null
-        },
-        {"type":"filter", "test":"d.value!=null"}
-      ]
     },
     {
       "name": "us-state-emissions",
@@ -60,37 +39,13 @@
         },
         {"type":"filter", "test":"d.path!=null && d.merged!=null"}
       ]
-    },
-    {
-      "name": "counties",
-      "url": "data/us-10m.json",
-      "format": {"type": "topojson", "feature": "counties"},
-      "transform": [
-        {"type": "geopath", "value": "data", "projection": "albersUsa"},
-        {
-          "type": "zip",
-          "key": "data.id",
-          "with": "us-county-unemp",
-          "withKey": "value.data.id",
-          "as": "bro",
-          "default": null
-        },
-        {"type":"filter", "test":"d.path!=null && d.bro!=null"}
-      ]
     }
   ],
   "scales": [
     {
-      "name": "blue",
-      "type": "quantize",
-      "domain": [0, 0.15],
-      "range": ["#f7fbff", "#deebf7", "#c6dbef", "#9ecae1", "#6baed6",
-                "#4292c6", "#2171b5", "#08519c", "#08306b"]
-    },
-    {
       "name": "color",
       "type": "quantize",
-      "domain": [2.71, 676.94],
+      "domain": [10.58, 99.91],
       "range":  ["#fef0d9","#fdd49e","#fdbb84","#fc8d59","#ef6548","#d7301f","#990000"]
     }
   ],
