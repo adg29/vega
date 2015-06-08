@@ -1,4 +1,5 @@
 var SPECS = [
+  "choropleth-nuclear",
   "arc",
   "area",
   "bar",
