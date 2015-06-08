@@ -5,12 +5,19 @@
     {
       "name": "emissions",
       "url": "data/us-state-emissions.csv",
-      "format": {"type": "csv", "parse": {"emissions":"number"}}
+      "format": {
+        "type": "csv",
+        "parse": {
+          "emissions": "number"
+        }
+      }
     },
     {
       "name": "us-state-emissions",
       "url": "data/us-state-names.tsv",
-      "format": {"type": "tsv"},
+      "format": {
+        "type": "tsv"
+      },
       "transform": [
         {
           "type": "zip",
@@ -20,15 +27,25 @@
           "as": "value",
           "default": null
         },
-        {"type":"filter", "test":"d.value!=null"}
+        {
+          "type": "filter",
+          "test": "d.value!=null"
+        }
       ]
     },
     {
       "name": "states",
       "url": "data/us.json",
-      "format": {"type": "topojson", "feature": "states"},
+      "format": {
+        "type": "topojson",
+        "feature": "states"
+      },
       "transform": [
-        {"type": "geopath", "value": "data", "projection": "albersUsa"},
+        {
+          "type": "geopath",
+          "value": "data",
+          "projection": "albersUsa"
+        },
         {
           "type": "zip",
           "key": "data.id",
@@ -37,7 +54,10 @@
           "as": "merged",
           "default": null
         },
-        {"type":"filter", "test":"d.path!=null && d.merged!=null"}
+        {
+          "type": "filter",
+          "test": "d.path!=null && d.merged!=null"
+        }
       ]
     }
   ],
@@ -45,19 +65,104 @@
     {
       "name": "color",
       "type": "quantize",
-      "domain": [10.58, 99.91],
-      "range":  ["#fef0d9","#fdd49e","#fdbb84","#fc8d59","#ef6548","#d7301f","#990000"]
+      "domain": [
+        10.58,
+        99.91
+      ],
+      "range": [
+        "#fef0d9",
+        "#fdd49e",
+        "#fdbb84",
+        "#fc8d59",
+        "#ef6548",
+        "#d7301f",
+        "#990000"
+      ]
     }
   ],
   "marks": [
     {
-      "type": "path",
-      "from": {"data": "states"},
+      "type": "group",
       "properties": {
-        "enter": { "path": {"field": "path"} },
-        "update": { "fill": {"scale":"color", "field":"merged.value.data.emissions"} },
-        "hover": { "fill": {"value": "red"} }
-      }
+        "enter": {
+          "x": {
+            "value": 0
+          },
+          "y": {
+            "value": 0
+          },
+          "width": {
+            "group": "width"
+          },
+          "height": {
+            "value": 60
+          }
+        }
+      },
+      "from": {
+        "data": "states"
+      },
+      "marks": [
+        {
+          "type": "path",
+          "from": {
+            "data": "states"
+          },
+          "properties": {
+            "enter": {
+              "path": {
+                "field": "path"
+              }
+            },
+            "update": {
+              "fill": {
+                "scale": "color",
+                "field": "merged.value.data.emissions"
+              }
+            },
+            "hover": {
+              "fill": {
+                "value": "red"
+              }
+            }
+          }
+        },
+        {
+          "type": "text",
+          "from": {
+            "data": "states",
+            "transform": [
+              {
+                "type": "formula",
+                "field": "label",
+                "expr": "d.merged.value.data.state + ' ' + d.merged.value.data.emissions"
+              }
+            ]
+          },
+          "properties": {
+            "enter": {
+              "x": {
+                "field": "centroidX"
+              },
+              "y": {
+                "field": "centroidY"
+              },
+              "font": {
+                "value": "Georgia"
+              },
+              "fontSize": {
+                "value": 10
+              },
+              "fill": {
+                "value": "#000"
+              },
+              "text": {
+                "field": "label"
+              }
+            }
+          }
+        }
+      ]
     }
   ]
 }
